@@ -1,0 +1,554 @@
+show me a best example of java spring boot application.properties mybatis example of two db schema with mapper xml file and no mapper interface
+
+ChatGPT의 말:
+ChatGPT
+To configure a Spring Boot application that uses MyBatis with two database schemas (without using mapper interfaces), you will need to define the necessary DataSource, SqlSessionFactory, TransactionManager, and SqlSessionTemplate beans in a configuration file. Additionally, the queries should be written directly in XML files without the need for Java-based mapper interfaces.
+
+This example will focus on using the application.properties configuration, managing two database schemas, and using XML-based MyBatis mappers.
+
+1. Project Setup
+In your pom.xml, include the necessary dependencies for Spring Boot, MyBatis, and the appropriate JDBC drivers (e.g., MySQL):
+
+xml
+코드 복사
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>spring-boot-mybatis-multi-db</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.1.2</version> <!-- Use the latest version -->
+    </parent>
+
+    <dependencies>
+        <!-- Spring Boot Starter Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- MyBatis Spring Boot Starter -->
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
+        <!-- MySQL Driver -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+2. Configure Application Properties
+Define the configurations for two different databases (or schemas) in the application.properties file:
+
+src/main/resources/application.properties:
+
+properties
+코드 복사
+# Configuration for Schema 1
+spring.datasource.schema1.url=jdbc:mysql://localhost:3306/schema1
+spring.datasource.schema1.username=root
+spring.datasource.schema1.password=your_password
+spring.datasource.schema1.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# Configuration for Schema 2
+spring.datasource.schema2.url=jdbc:mysql://localhost:3306/schema2
+spring.datasource.schema2.username=root
+spring.datasource.schema2.password=your_password
+spring.datasource.schema2.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# MyBatis configurations
+mybatis.config-location=classpath:mybatis-config.xml
+mybatis.mapper-locations=classpath:mapper/schema1/*.xml, classpath:mapper/schema2/*.xml
+3. Create DataSource and MyBatis Configurations
+You need to define separate configurations for both schemas in a Spring configuration class. This includes creating DataSource, SqlSessionFactory, TransactionManager, and SqlSessionTemplate beans for each schema.
+
+src/main/java/com/example/mybatisdemo/config/DataSourceConfig.java:
+
+java
+코드 복사
+package com.example.mybatisdemo.config;
+
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mybatis.spring.SqlSessionFactoryBean;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+
+import javax.sql.DataSource;
+
+@Configuration
+public class DataSourceConfig {
+
+    // Schema 1 DataSource Configuration
+    @Primary
+    @Bean(name = "schema1DataSource")
+    @ConfigurationProperties(prefix = "spring.datasource.schema1")
+    public DataSource schema1DataSource() {
+        return org.springframework.boot.jdbc.DataSourceBuilder.create().build();
+    }
+
+    @Primary
+    @Bean(name = "schema1SqlSessionFactory")
+    public SqlSessionFactory schema1SqlSessionFactory(@Qualifier("schema1DataSource") DataSource dataSource) throws Exception {
+        SqlSessionFactoryBean sessionFactory = new SqlSessionFactoryBean();
+        sessionFactory.setDataSource(dataSource);
+        sessionFactory.setMapperLocations(new PathMatchingResourcePatternResolver().getResources("classpath:mapper/schema1/*.xml"));
+        return sessionFactory.getObject();
+    }
+
+    @Primary
+    @Bean(name = "schema1TransactionManager")
+    public DataSourceTransactionManager schema1TransactionManager(@Qualifier("schema1DataSource") DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
+
+    @Primary
+    @Bean(name = "schema1SqlSessionTemplate")
+    public SqlSessionTemplate schema1SqlSessionTemplate(@Qualifier("schema1SqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
+        return new SqlSessionTemplate(sqlSessionFactory);
+    }
+
+    // Schema 2 DataSource Configuration
+    @Bean(name = "schema2DataSource")
+    @ConfigurationProperties(prefix = "spring.datasource.schema2")
+    public DataSource schema2DataSource() {
+        return org.springframework.boot.jdbc.DataSourceBuilder.create().build();
+    }
+
+    @Bean(name = "schema2SqlSessionFactory")
+    public SqlSessionFactory schema2SqlSessionFactory(@Qualifier("schema2DataSource") DataSource dataSource) throws Exception {
+        SqlSessionFactoryBean sessionFactory = new SqlSessionFactoryBean();
+        sessionFactory.setDataSource(dataSource);
+        sessionFactory.setMapperLocations(new PathMatchingResourcePatternResolver().getResources("classpath:mapper/schema2/*.xml"));
+        return sessionFactory.getObject();
+    }
+
+    @Bean(name = "schema2TransactionManager")
+    public DataSourceTransactionManager schema2TransactionManager(@Qualifier("schema2DataSource") DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
+
+    @Bean(name = "schema2SqlSessionTemplate")
+    public SqlSessionTemplate schema2SqlSessionTemplate(@Qualifier("schema2SqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
+        return new SqlSessionTemplate(sqlSessionFactory);
+    }
+}
+4. Create the Model Classes
+Define model classes that represent the tables in both schemas.
+
+src/main/java/com/example/mybatisdemo/model/UserSchema1.java:
+
+java
+코드 복사
+package com.example.mybatisdemo.model;
+
+public class UserSchema1 {
+    private Long id;
+    private String name;
+    private String email;
+
+    // Getters and setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+}
+src/main/java/com/example/mybatisdemo/model/UserSchema2.java:
+
+java
+코드 복사
+package com.example.mybatisdemo.model;
+
+public class UserSchema2 {
+    private Long id;
+    private String name;
+    private String email;
+
+    // Getters and setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+}
+5. Create the MyBatis XML Configuration
+Create the global MyBatis configuration file.
+
+src/main/resources/mybatis-config.xml:
+
+xml
+코드 복사
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+    <typeAliases>
+        <typeAlias alias="userSchema1" type="com.example.mybatisdemo.model.UserSchema1"/>
+        <typeAlias alias="userSchema2" type="com.example.mybatisdemo.model.UserSchema2"/>
+    </typeAliases>
+</configuration>
+6. Create the Mapper XML Files
+Define SQL queries directly in the MyBatis XML mapper files for both schemas.
+
+src/main/resources/mapper/schema1/UserMapper.xml:
+
+xml
+코드 복사
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="UserMapperSchema1">
+
+    <resultMap id="userResultMap" type="userSchema1">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="email" column="email"/>
+    </resultMap>
+
+    <select id="findById" resultMap="userResultMap">
+        SELECT * FROM users WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="userResultMap">
+        SELECT * FROM users
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO users (name, email) VALUES (#{name}, #{email})
+    </insert>
+
+    <update id="update">
+        UPDATE users SET name=#{name}, email=#{email} WHERE id=#{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM users WHERE id=#{id}
+    </delete>
+</mapper>
+src/main/resources/mapper/schema2/UserMapper.xml:
+
+xml
+코드 복사
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="UserMapperSchema2">
+
+    <resultMap id="userResultMap" type="userSchema2">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="email" column="email"/>
+    </resultMap>
+
+    <select id="findById" resultMap="userResultMap">
+        SELECT * FROM users WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="userResultMap">
+        SELECT * FROM users
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO users (name, email) VALUES (#{name}, #{email})
+    </insert>
+
+    <update id="update">
+        UPDATE users SET name=#{name}, email=#{email} WHERE id=#{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM users WHERE id=#{id}
+    </delete>
+</mapper>
+7. Create the Service Layer
+You can create service classes that directly use MyBatis' SqlSessionTemplate to execute SQL queries for each schema.
+
+src/main/java/com/example/mybatisdemo/service/UserSchema1Service.java:
+
+java
+코드 복사
+package com.example.mybatisdemo.service;
+
+import com.example.mybatisdemo.model.UserSchema1;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class UserSchema1Service {
+
+    private final SqlSessionTemplate sqlSessionTemplate;
+
+    public UserSchema1Service(SqlSessionTemplate sqlSessionTemplate) {
+        this.sqlSessionTemplate = sqlSessionTemplate;
+    }
+
+    public UserSchema1 findById(Long id) {
+        return sqlSessionTemplate.selectOne("UserMapperSchema1.findById", id);
+    }
+
+    public List<UserSchema1> findAll() {
+        return sqlSessionTemplate.selectList("UserMapperSchema1.findAll");
+    }
+
+    public void save(UserSchema1 user) {
+        if (user.getId() == null) {
+            sqlSessionTemplate.insert("UserMapperSchema1.insert", user);
+        } else {
+            sqlSessionTemplate.update("UserMapperSchema1.update", user);
+        }
+    }
+
+    public void delete(Long id) {
+        sqlSessionTemplate.delete("UserMapperSchema1.delete", id);
+    }
+}
+src/main/java/com/example/mybatisdemo/service/UserSchema2Service.java:
+
+java
+코드 복사
+package com.example.mybatisdemo.service;
+
+import com.example.mybatisdemo.model.UserSchema2;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class UserSchema2Service {
+
+    private final SqlSessionTemplate sqlSessionTemplate;
+
+    public UserSchema2Service(SqlSessionTemplate sqlSessionTemplate) {
+        this.sqlSessionTemplate = sqlSessionTemplate;
+    }
+
+    public UserSchema2 findById(Long id) {
+        return sqlSessionTemplate.selectOne("UserMapperSchema2.findById", id);
+    }
+
+    public List<UserSchema2> findAll() {
+        return sqlSessionTemplate.selectList("UserMapperSchema2.findAll");
+    }
+
+    public void save(UserSchema2 user) {
+        if (user.getId() == null) {
+            sqlSessionTemplate.insert("UserMapperSchema2.insert", user);
+        } else {
+            sqlSessionTemplate.update("UserMapperSchema2.update", user);
+        }
+    }
+
+    public void delete(Long id) {
+        sqlSessionTemplate.delete("UserMapperSchema2.delete", id);
+    }
+}
+8. Create the REST Controllers
+Expose the service layers through REST API endpoints for both schemas.
+
+src/main/java/com/example/mybatisdemo/controller/UserSchema1Controller.java:
+
+java
+코드 복사
+package com.example.mybatisdemo.controller;
+
+import com.example.mybatisdemo.model.UserSchema1;
+import com.example.mybatisdemo.service.UserSchema1Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/schema1/users")
+public class UserSchema1Controller {
+
+    private final UserSchema1Service userService;
+
+    public UserSchema1Controller(UserSchema1Service userService) {
+        this.userService = userService;
+    }
+
+    @GetMapping
+    public List<UserSchema1> getAllUsers() {
+        return userService.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<UserSchema1> getUserById(@PathVariable Long id) {
+        UserSchema1 user = userService.findById(id);
+        if (user != null) {
+            return ResponseEntity.ok(user);
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
+    @PostMapping
+    public ResponseEntity<UserSchema1> createUser(@RequestBody UserSchema1 user) {
+        userService.save(user);
+        return ResponseEntity.status(HttpStatus.CREATED).body(user);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<UserSchema1> updateUser(@PathVariable Long id, @RequestBody UserSchema1 user) {
+        user.setId(id);
+        userService.save(user);
+        return ResponseEntity.ok(user);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        userService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+}
+src/main/java/com/example/mybatisdemo/controller/UserSchema2Controller.java:
+
+java
+코드 복사
+package com.example.mybatisdemo.controller;
+
+import com.example.mybatisdemo.model.UserSchema2;
+import com.example.mybatisdemo.service.UserSchema2Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/schema2/users")
+public class UserSchema2Controller {
+
+    private final UserSchema2Service userService;
+
+    public UserSchema2Controller(UserSchema2Service userService) {
+        this.userService = userService;
+    }
+
+    @GetMapping
+    public List<UserSchema2> getAllUsers() {
+        return userService.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<UserSchema2> getUserById(@PathVariable Long id) {
+        UserSchema2 user = userService.findById(id);
+        if (user != null) {
+            return ResponseEntity.ok(user);
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
+    @PostMapping
+    public ResponseEntity<UserSchema2> createUser(@RequestBody UserSchema2 user) {
+        userService.save(user);
+        return ResponseEntity.status(HttpStatus.CREATED).body(user);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<UserSchema2> updateUser(@PathVariable Long id, @RequestBody UserSchema2 user) {
+        user.setId(id);
+        userService.save(user);
+        return ResponseEntity.ok(user);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        userService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+}
+9. Create the Database Tables
+Run SQL scripts to create the necessary users table in both schemas.
+
+For Schema 1:
+
+sql
+코드 복사
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL
+);
+For Schema 2:
+
+sql
+코드 복사
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL
+);
+10. Run the Application
+You can run your Spring Boot application using your IDE or Maven:
+
+bash
+코드 복사
+mvn spring-boot:run
+11. Test the API
+Use curl or Postman to test the API:
+
+Schema 1 Endpoints:
+
+Create a new user:
+bash
+코드 복사
+curl -X POST http://localhost:8080/api/schema1/users -H "Content-Type: application/json" -d '{"name": "John Doe", "email": "john.doe@example.com"}'
+Get all users:
+bash
+코드 복사
+curl http://localhost:8080/api/schema1/users
+Schema 2 Endpoints:
+
+Create a new user:
+bash
+코드 복사
+curl -X POST http://localhost:8080/api/schema2/users -H "Content-Type: application/json" -d '{"name": "Jane Doe", "email": "jane.doe@example.com"}'
+Get all users:
+bash
+코드 복사
+curl http://localhost:8080/api/schema2/users
+Summary
+This setup demonstrates how to configure a Spring Boot application that interacts with two different database schemas using MyBatis, without the need for mapper interfaces. Instead, SQL queries are defined in MyBatis XML files, and the application is configured using application.properties.
