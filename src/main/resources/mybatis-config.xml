@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+    <typeAliases>
+        <typeAlias alias="userSchema1" type="com.example.mybatisdemo.model.UserSchema1"/>
+        <typeAlias alias="userSchema2" type="com.example.mybatisdemo.model.UserSchema2"/>
+    </typeAliases>
+</configuration>
